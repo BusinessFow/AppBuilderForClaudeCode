@@ -1,61 +1,217 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🧠 AppBuilder for ClaudeCode
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+**AppBuilder for ClaudeCode** is an advanced tool for managing software development projects with Claude CLI integration. The system enables automation of coding tasks, code refactoring, and project analysis using Claude artificial intelligence.
 
-## About Laravel
+> 💡 **Free & Open Source** – use it, fork it, enhance it to fit your needs!
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 🎯 About the Project
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+AppBuilder for ClaudeCode is a complete environment for managing programming tasks with AI assistance. Built on the Laravel framework, the system provides:
 
-## Learning Laravel
+- **Claude CLI Integration** – direct utilization of Claude's capabilities for code analysis and generation
+- **Task Queue System** – asynchronous processing of multiple tasks in the background
+- **Project Management** – organize work into dedicated projects with progress tracking
+- **Admin Panel** – intuitive Filament-based interface for complete system management
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## 📚 Key Features
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 🚀 Task Management
+- ✅ **Task Queue for Claude** – add multiple tasks and let Claude process them automatically
+- 📊 **Status Tracking** – monitor progress of each task in real-time
+- 🔄 **Automatic Retries** – system automatically retries failed tasks
 
-## Laravel Sponsors
+### 💬 Interactive Interface
+- 🎨 **Modern Dashboard** – clean main panel with widgets and statistics
+- 📝 **Task Editor** – built-in editor with syntax highlighting
+- 📋 **Session History** – complete history of all Claude interactions
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### ⚙️ Advanced Capabilities
+- 🔌 **Persistent Claude CLI Process** – tasks are processed even after closing the browser
+- 🧩 **Modular Architecture** – clean Laravel + Livewire structure, easy to extend
+- 🔐 **Permission System** – access control and user management
+- 📊 **System Logs** – detailed logging of all operations
 
-### Premium Partners
+### 🛠 Developer Tools
+- 🐛 **Debug Mode** – detailed information about processed tasks
+- 📦 **API Endpoints** – RESTful API for integration with external tools
+- 🧪 **Unit Tests** – comprehensive Pest test suite
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+---
 
-## Contributing
+## 📸 Application Structure
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Main Dashboard
+- **Statistics Widgets** – number of projects, tasks, sessions
+- **Recent Activity List** – overview of latest operations
+- **Quick Actions** – shortcuts to most frequently used functions
 
-## Code of Conduct
+### Projects Module
+- **Project List** – manage all projects
+- **Project Details** – complete information about project, tasks, and sessions
+- **Git Integration** – automatic retrieval of repository information
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Settings Panel
+- **Claude Configuration** – customize AI behavior
+- **System Settings** – timeouts, permissions, logging levels
+- **User Management** – create and edit user accounts
 
-## Security Vulnerabilities
+---
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## 🚀 Installation
 
-## License
+### System Requirements
+- PHP 8.1 or higher
+- Laravel 10+
+- Node.js 16+ with npm
+- MySQL/PostgreSQL/SQLite
+- Claude CLI installed globally
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Installation Steps
+
+```bash
+# Clone repository
+git clone https://github.com/your-username/appbuilder-for-claudecode.git
+cd appbuilder-for-claudecode
+
+# Install PHP dependencies
+composer install
+
+# Install JavaScript dependencies
+npm install && npm run build
+
+# Configure environment
+cp .env.example .env
+php artisan key:generate
+
+# Configure database (edit .env)
+# DB_CONNECTION=mysql
+# DB_HOST=127.0.0.1
+# DB_PORT=3306
+# DB_DATABASE=appbuilder
+# DB_USERNAME=root
+# DB_PASSWORD=
+
+# Run database migrations
+php artisan migrate
+
+# Create administrator account
+php artisan make:filament-user
+
+# Start Claude worker (in separate terminal)
+php artisan claude:worker
+
+# Start application server
+php artisan serve
+```
+
+The application will be available at: `http://localhost:8000`
+
+---
+
+## 🔧 Configuration
+
+### Environment Variables (.env)
+```env
+# Claude CLI
+CLAUDE_CLI_PATH=/usr/local/bin/claude
+CLAUDE_TIMEOUT=300
+CLAUDE_MAX_RETRIES=3
+
+# Application settings
+APP_TIMEZONE=UTC
+APP_LOCALE=en
+
+# System limits
+MAX_CONCURRENT_TASKS=5
+TASK_RETENTION_DAYS=30
+```
+
+### Claude CLI Configuration
+```bash
+# Install Claude CLI globally
+npm install -g @anthropic-ai/claude-code
+
+# Verify installation
+claude --version
+```
+
+---
+
+## 📚 API Documentation
+
+### Basic Endpoints
+
+```http
+# Projects
+GET    /api/projects           # List projects
+POST   /api/projects           # Create project
+GET    /api/projects/{id}      # Project details
+PUT    /api/projects/{id}      # Update project
+DELETE /api/projects/{id}      # Delete project
+
+# Tasks
+POST   /api/tasks              # Add task to queue
+GET    /api/tasks/{id}/status  # Task status
+GET    /api/tasks/{id}/result  # Task result
+
+# Claude Sessions
+GET    /api/sessions           # List sessions
+GET    /api/sessions/{id}      # Session details
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+php artisan test
+
+# Tests with code coverage
+php artisan test --coverage
+
+# Test specific module
+php artisan test --filter=ProjectTest
+```
+
+---
+
+## 🤝 Contributing
+
+This project is open for contributions! Here's how you can help:
+
+1. **Fork** the repository
+2. Create a **branch** for your feature (`git checkout -b feature/AmazingFeature`)
+3. **Commit** your changes (`git commit -m 'Add some AmazingFeature'`)
+4. **Push** to the branch (`git push origin feature/AmazingFeature`)
+5. Open a **Pull Request**
+
+### Reporting Issues
+Use the [Issues](https://github.com/your-username/appbuilder-for-claudecode/issues) tab to report bugs and suggest improvements.
+
+---
+
+## 📄 License
+
+This project is available under the MIT License. See the [LICENSE](LICENSE) file for more details.
+
+---
+
+## 🙏 Acknowledgments
+
+- Created by [@chris_collin_](https://x.com/chris_collin_)
+- Built with [Laravel](https://laravel.com), [Filament](https://filamentphp.com), and [Claude CLI](https://claude.ai)
+- Supported by the open source community
+
+---
+
+## 📞 Contact & Support
+
+- **Documentation**: [Project Wiki](https://github.com/your-username/appbuilder-for-claudecode/wiki)
+- **Questions**: [Discussions](https://github.com/your-username/appbuilder-for-claudecode/discussions)
+- **Twitter**: [@chris_collin_](https://x.com/chris_collin_)
+
