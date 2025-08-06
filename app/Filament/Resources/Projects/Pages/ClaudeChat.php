@@ -62,17 +62,17 @@ class ClaudeChat extends Page implements HasForms
                 ]),
             
             Action::make('createMissingDirectory')
-                ->label('Create Directory')
+                ->label(fn() => $this->getDirectoryActionLabel())
                 ->icon('heroicon-o-folder-plus')
                 ->color('warning')
                 ->action(function () {
                     $this->createProjectDirectory($this->project->project_path);
                 })
-                ->modalHeading('Create Project Directory')
-                ->modalDescription(fn() => "The directory '{$this->project->project_path}' does not exist. Do you want to create it?")
-                ->modalSubmitActionLabel('Create Directory')
+                ->modalHeading('Fix Project Directory')
+                ->modalDescription(fn() => $this->getDirectoryActionDescription())
+                ->modalSubmitActionLabel(fn() => $this->getDirectoryActionButtonLabel())
                 ->requiresConfirmation()
-                ->visible(fn() => !file_exists($this->project->project_path)),
+                ->visible(fn() => !$this->isDirectoryAccessible($this->project->project_path)),
             
             Action::make('git_pull')
                 ->label('Git Pull')
@@ -138,8 +138,8 @@ class ClaudeChat extends Page implements HasForms
                         ->send();
                 }
             } else {
-                // Check if project path exists before starting Claude
-                if (!file_exists($this->project->project_path)) {
+                // Check if project path exists and is accessible
+                if (!$this->isDirectoryAccessible($this->project->project_path)) {
                     $this->showPathNotFoundDialog();
                     return;
                 }
@@ -184,23 +184,242 @@ class ClaudeChat extends Page implements HasForms
         }
     }
     
+    public function isDirectoryAccessible(string $path): bool
+    {
+        // Clear stat cache for this path to ensure fresh check
+        clearstatcache(true, $path);
+        
+        // First check if path exists using @ to suppress warnings
+        if (!@file_exists($path)) {
+            return false;
+        }
+        
+        // Check if it's a directory
+        if (!@is_dir($path)) {
+            return false;
+        }
+        
+        // Check if we can read the directory
+        if (!@is_readable($path)) {
+            return false;
+        }
+        
+        // Try to actually access the directory
+        $testResult = @scandir($path);
+        if ($testResult === false) {
+            return false;
+        }
+        
+        // Also check if we can execute into the directory (required for cd)
+        if (!@is_executable($path)) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    public function getDirectoryActionLabel(): string
+    {
+        $status = $this->getDirectoryStatus($this->project->project_path);
+        
+        if (!$status['exists']) {
+            return 'Create Directory';
+        } elseif (!$status['is_readable'] || !$status['is_executable']) {
+            return 'Fix Permissions';
+        } else {
+            return 'Fix Directory';
+        }
+    }
+    
+    protected function getDirectoryActionDescription(): string
+    {
+        $path = $this->project->project_path;
+        $status = $this->getDirectoryStatus($path);
+        
+        if (!$status['exists']) {
+            if ($status['parent_writable']) {
+                return "The directory '{$path}' does not exist. Do you want to create it?";
+            } else {
+                return "The directory '{$path}' does not exist and the parent directory is not writable. You may need to create it manually with appropriate permissions.";
+            }
+        } elseif (!$status['is_dir']) {
+            return "The path '{$path}' exists but is not a directory. Please remove the file or choose a different path.";
+        } elseif (!$status['is_readable']) {
+            return "The directory '{$path}' exists but cannot be accessed due to permission issues. Do you want to try to fix the permissions?";
+        } else {
+            return "There's an issue with the directory '{$path}'. " . $status['message'];
+        }
+    }
+    
+    protected function getDirectoryActionButtonLabel(): string
+    {
+        $status = $this->getDirectoryStatus($this->project->project_path);
+        
+        if (!$status['exists']) {
+            return 'Create Directory';
+        } elseif (!$status['is_readable']) {
+            return 'Fix Permissions';
+        } else {
+            return 'Proceed';
+        }
+    }
+    
+    protected function getDirectoryStatus(string $path): array
+    {
+        // Clear stat cache for accurate results
+        clearstatcache(true, $path);
+        
+        $status = [
+            'exists' => false,
+            'is_dir' => false,
+            'is_readable' => false,
+            'is_writable' => false,
+            'is_executable' => false,
+            'parent_writable' => false,
+            'message' => ''
+        ];
+        
+        // Check if path exists using @ to suppress warnings
+        if (@file_exists($path)) {
+            $status['exists'] = true;
+            
+            if (@is_dir($path)) {
+                $status['is_dir'] = true;
+                $status['is_readable'] = @is_readable($path);
+                $status['is_writable'] = @is_writable($path);
+                $status['is_executable'] = @is_executable($path);
+                
+                if (!$status['is_readable']) {
+                    $status['message'] = "Directory exists but cannot be read (permission denied). Please check permissions.";
+                } elseif (!$status['is_executable']) {
+                    $status['message'] = "Directory exists but cannot be accessed (no execute permission). Run: chmod +x " . escapeshellarg($path);
+                } elseif (!$status['is_writable']) {
+                    $status['message'] = "Directory exists but is read-only. Claude may not be able to make changes.";
+                } else {
+                    // Try to actually access the directory
+                    $testResult = @scandir($path);
+                    if ($testResult === false) {
+                        $status['message'] = "Directory exists but cannot be accessed. Please check permissions.";
+                        $status['is_readable'] = false;
+                    } else {
+                        $status['message'] = "Directory is accessible.";
+                    }
+                }
+            } else {
+                $status['message'] = "Path exists but is not a directory (it's a file).";
+            }
+        } else {
+            // Check if parent directory exists and is writable
+            $parentDir = dirname($path);
+            if (@file_exists($parentDir) && @is_dir($parentDir) && @is_writable($parentDir)) {
+                $status['parent_writable'] = true;
+                $status['message'] = "Directory does not exist but can be created.";
+            } else {
+                $status['message'] = "Directory does not exist and cannot be created (parent directory not writable or doesn't exist).";
+            }
+        }
+        
+        return $status;
+    }
+    
     protected function showPathNotFoundDialog(): void
     {
         $path = $this->project->project_path;
+        $status = $this->getDirectoryStatus($path);
         
-        Notification::make()
-            ->title('Project directory does not exist')
-            ->body("The directory '{$path}' does not exist. Click 'Create Directory' button above to create it, or edit the project to change the path.")
-            ->warning()
-            ->persistent()
-            ->send();
+        if (!$status['exists']) {
+            if ($status['parent_writable']) {
+                Notification::make()
+                    ->title('Project directory does not exist')
+                    ->body("The directory '{$path}' does not exist. Click 'Create Directory' button above to create it, or edit the project to change the path.")
+                    ->warning()
+                    ->persistent()
+                    ->send();
+            } else {
+                Notification::make()
+                    ->title('Cannot access project directory')
+                    ->body("The directory '{$path}' does not exist and cannot be created. Please check the path and parent directory permissions.")
+                    ->danger()
+                    ->persistent()
+                    ->send();
+            }
+        } elseif (!$status['is_dir']) {
+            Notification::make()
+                ->title('Invalid path')
+                ->body("The path '{$path}' exists but is not a directory. Please edit the project and provide a valid directory path.")
+                ->danger()
+                ->persistent()
+                ->send();
+        } elseif (!$status['is_readable']) {
+            Notification::make()
+                ->title('Permission denied')
+                ->body("Cannot access directory '{$path}'. Please check directory permissions or run: sudo chmod 755 " . escapeshellarg($path))
+                ->danger()
+                ->persistent()
+                ->send();
+        } else {
+            Notification::make()
+                ->title('Directory access issue')
+                ->body($status['message'])
+                ->warning()
+                ->persistent()
+                ->send();
+        }
     }
     
     protected function createProjectDirectory(string $path): void
     {
         try {
-            if (!file_exists($path)) {
-                if (mkdir($path, 0755, true)) {
+            $status = $this->getDirectoryStatus($path);
+            
+            if ($status['exists']) {
+                if (!$status['is_readable'] || !$status['is_executable']) {
+                    // Try to fix permissions
+                    $fixCommand = "chmod 755 " . escapeshellarg($path);
+                    exec($fixCommand . " 2>&1", $output, $returnCode);
+                    
+                    if ($returnCode === 0) {
+                        Notification::make()
+                            ->title('Permissions fixed')
+                            ->body("Directory permissions have been updated. Trying to start Claude...")
+                            ->success()
+                            ->send();
+                        
+                        // Try to start Claude again
+                        $this->toggleClaude();
+                    } else {
+                        // Try with sudo
+                        $fixCommand = "sudo chmod 755 " . escapeshellarg($path);
+                        exec($fixCommand . " 2>&1", $output, $returnCode);
+                        
+                        if ($returnCode === 0) {
+                            Notification::make()
+                                ->title('Permissions fixed')
+                                ->body("Directory permissions have been updated with sudo. Trying to start Claude...")
+                                ->success()
+                                ->send();
+                            
+                            // Try to start Claude again
+                            $this->toggleClaude();
+                        } else {
+                            throw new \Exception("Failed to fix permissions. Please run manually: " . $fixCommand);
+                        }
+                    }
+                } else {
+                    Notification::make()
+                        ->title('Directory already exists')
+                        ->body("The directory '{$path}' already exists and is accessible.")
+                        ->info()
+                        ->send();
+                    
+                    // Try to start Claude again
+                    $this->toggleClaude();
+                }
+            } else {
+                // Try to create directory
+                $created = @mkdir($path, 0755, true);
+                
+                if ($created) {
                     Notification::make()
                         ->title('Directory created')
                         ->body("The directory '{$path}' has been created successfully.")
@@ -210,13 +429,25 @@ class ClaudeChat extends Page implements HasForms
                     // Try to start Claude again
                     $this->toggleClaude();
                 } else {
-                    throw new \Exception('Failed to create directory');
+                    // Get more detailed error
+                    $error = error_get_last();
+                    $errorMsg = $error ? $error['message'] : 'Unknown error';
+                    
+                    // Check if parent directory exists
+                    $parentDir = dirname($path);
+                    if (!@file_exists($parentDir)) {
+                        throw new \Exception("Parent directory '{$parentDir}' does not exist. Please create it first.");
+                    } elseif (!@is_writable($parentDir)) {
+                        throw new \Exception("Parent directory '{$parentDir}' is not writable. Check permissions.");
+                    } else {
+                        throw new \Exception("Failed to create directory: " . $errorMsg);
+                    }
                 }
             }
         } catch (\Exception $e) {
             Notification::make()
-                ->title('Error creating directory')
-                ->body("Failed to create directory: " . $e->getMessage())
+                ->title('Error handling directory')
+                ->body($e->getMessage())
                 ->danger()
                 ->send();
         }

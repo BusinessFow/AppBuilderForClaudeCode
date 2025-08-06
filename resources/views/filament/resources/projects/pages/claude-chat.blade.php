@@ -173,7 +173,26 @@
                         @empty
                             <div class="flex items-center justify-center h-full min-h-[300px]">
                                 <div class="text-center">
-                                    @if($isRunning)
+                                    @php
+                                        $directoryAccessible = $this->isDirectoryAccessible($project->project_path);
+                                    @endphp
+                                    
+                                    @if(!$directoryAccessible)
+                                        <div class="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                                            <div class="flex items-center justify-center mb-2">
+                                                <x-heroicon-o-exclamation-triangle class="h-8 w-8 text-yellow-600 dark:text-yellow-400" />
+                                            </div>
+                                            <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">
+                                                Project directory issue
+                                            </h3>
+                                            <p class="text-sm text-yellow-700 dark:text-yellow-300">
+                                                The directory '{{ $project->project_path }}' is not accessible.
+                                            </p>
+                                            <p class="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                                                Click the "{{ $this->getDirectoryActionLabel() }}" button above to resolve this issue.
+                                            </p>
+                                        </div>
+                                    @elseif($isRunning)
                                         <div class="animate-pulse">
                                             <div class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm text-primary-600 dark:text-primary-400">
                                                 <svg class="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
