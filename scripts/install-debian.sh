@@ -108,6 +108,7 @@ echo "Step 6: Setting up permissions..."
 
 # Create necessary directories
 mkdir -p storage/app/claude-sessions
+mkdir -p storage/app/claude-home
 mkdir -p storage/logs
 mkdir -p storage/app/public/screenshots
 mkdir -p bootstrap/cache

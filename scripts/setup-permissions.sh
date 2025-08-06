@@ -19,6 +19,7 @@ echo "Base path: $BASE_PATH"
 # Create necessary directories
 echo "Creating necessary directories..."
 mkdir -p "$BASE_PATH/storage/app/claude-sessions"
+mkdir -p "$BASE_PATH/storage/app/claude-home"
 mkdir -p "$BASE_PATH/storage/logs"
 mkdir -p "$BASE_PATH/storage/app/public/screenshots"
 
