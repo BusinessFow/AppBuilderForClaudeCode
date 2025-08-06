@@ -38,6 +38,7 @@ class ClaudeProcessManager
         try {
             // Use the shell script to manage screen sessions
             $scriptPath = base_path('scripts/claude-screen-manager.sh');
+            $screenName = "claude_{$project->id}";
             
             // Start screen session using the script
             $command = sprintf(
@@ -61,7 +62,7 @@ class ClaudeProcessManager
             
             if (!$pid || $pid === '') {
                 // Fallback: use screen name as identifier
-                $pid = "claude_{$project->id}";
+                $pid = $screenName;
             }
             
             Log::info("Started Claude using script", [
