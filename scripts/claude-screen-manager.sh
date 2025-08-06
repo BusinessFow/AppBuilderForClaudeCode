@@ -71,8 +71,19 @@ case "$ACTION" in
         # Start screen session with Claude
         export PATH="/usr/local/bin:$PATH"
         
-        # Create the command to run
-        CLAUDE_CMD="cd '$PROJECT_PATH' && echo 'Working directory: '$(pwd) && tail -f '$INPUT_PIPE' | '$CLAUDE_PATH' chat --no-color 2>&1 | tee '$LOG_FILE'"
+        # Set HOME directory for Claude to store its config
+        # Create a home directory for www-data if it doesn't exist
+        CLAUDE_HOME="${BASE_PATH}/storage/app/claude-home"
+        mkdir -p "$CLAUDE_HOME"
+        chmod 755 "$CLAUDE_HOME"
+        chown www-data:www-data "$CLAUDE_HOME" 2>/dev/null || chown _www:_www "$CLAUDE_HOME" 2>/dev/null || chown $(whoami):$(whoami) "$CLAUDE_HOME"
+        
+        # Create .config directory for Claude
+        mkdir -p "$CLAUDE_HOME/.config"
+        chmod 755 "$CLAUDE_HOME/.config"
+        
+        # Create the command to run with proper HOME and USER
+        CLAUDE_CMD="export HOME='$CLAUDE_HOME' && export USER='www-data' && cd '$PROJECT_PATH' && echo 'Working directory: '$(pwd) && echo 'HOME: '\$HOME && tail -f '$INPUT_PIPE' | '$CLAUDE_PATH' chat --no-color 2>&1 | tee '$LOG_FILE'"
         
         # Start screen session
         screen -dmS "$SCREEN_NAME" bash -c "$CLAUDE_CMD"
