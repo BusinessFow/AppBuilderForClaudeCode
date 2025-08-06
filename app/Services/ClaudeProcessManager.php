@@ -36,71 +36,39 @@ class ClaudeProcessManager
         ]);
         
         try {
-            // Create screen session name
-            $screenName = "claude_session_{$session->id}";
+            // Use the shell script to manage screen sessions
+            $scriptPath = base_path('scripts/claude-screen-manager.sh');
             
-            // Kill any existing screen session with same name
-            exec("screen -S {$screenName} -X quit 2>/dev/null");
-            
-            // Create communication directory
-            $communicationDir = storage_path("app/claude-sessions/{$session->id}");
-            if (!file_exists($communicationDir)) {
-                mkdir($communicationDir, 0755, true);
-            }
-            
-            // Create log file
-            $logFile = "{$communicationDir}/claude.log";
-            
-            // Create named pipe for input
-            $inputPipe = "{$communicationDir}/input.pipe";
-            if (file_exists($inputPipe)) {
-                unlink($inputPipe);
-            }
-            posix_mkfifo($inputPipe, 0666);
-            
-            // Build command to run Claude in screen session with named pipe
-            $claudeCommand = sprintf(
-                'export PATH="/usr/local/bin:$PATH" && cd %s && echo "Working directory: $(pwd)" && (tail -f %s | /usr/local/bin/claude chat --no-color 2>&1 | tee %s)',
+            // Start screen session using the script
+            $command = sprintf(
+                '%s start %d %s %d 2>&1',
+                escapeshellarg($scriptPath),
+                $project->id,
                 escapeshellarg($project->project_path),
-                escapeshellarg($inputPipe),
-                escapeshellarg($logFile)
+                $session->id
             );
             
-            // Start screen session with Claude
-            $screenCommand = sprintf(
-                'screen -dmS %s bash -c %s',
-                escapeshellarg($screenName),
-                escapeshellarg($claudeCommand)
-            );
-            
-            exec($screenCommand, $output, $returnCode);
+            // Execute with sudo if needed (configure sudoers for www-data user)
+            // For now, run without sudo - configure permissions properly
+            exec($command, $output, $returnCode);
             
             if ($returnCode !== 0) {
-                throw new \Exception("Failed to start screen session");
+                throw new \Exception("Failed to start screen session: " . implode("\n", $output));
             }
             
-            // Wait a moment for screen to start
-            sleep(1);
+            // The script returns PID on success
+            $pid = isset($output[0]) ? trim($output[0]) : null;
             
-            // Get the PID of the screen session - different approach
-            exec("screen -ls | grep {$screenName}", $screenOutput);
-            $pid = null;
-            
-            if (!empty($screenOutput[0])) {
-                // Parse screen output: "12345.claude_session_1  (Detached)"
-                if (preg_match('/^\s*(\d+)\./', $screenOutput[0], $matches)) {
-                    $pid = $matches[1];
-                }
+            if (!$pid || $pid === '') {
+                // Fallback: use screen name as identifier
+                $pid = "claude_{$project->id}";
             }
             
-            // If still no PID, use the screen name as identifier
-            if (!$pid) {
-                $pid = $screenName;
-            }
-            
-            Log::info("Screen session PID detection", [
-                'screen_output' => $screenOutput,
-                'extracted_pid' => $pid
+            Log::info("Started Claude using script", [
+                'command' => $command,
+                'output' => $output,
+                'pid' => $pid,
+                'return_code' => $returnCode
             ]);
             
             // Update session
@@ -160,41 +128,38 @@ class ClaudeProcessManager
                 'pid' => $session->process_id
             ]);
             
-            // Send command via screen
+            // Send command via script
             if ($session->process_id) {
-                // Build screen session name
-                $screenName = "claude_session_{$session->id}";
+                $scriptPath = base_path('scripts/claude-screen-manager.sh');
                 
-                // Check if screen session exists
-                exec("screen -ls | grep {$screenName}", $screenCheck, $returnCode);
+                // Send command using the script
+                $sendCommand = sprintf(
+                    '%s send %d %s %d 2>&1',
+                    escapeshellarg($scriptPath),
+                    $session->project_id,
+                    escapeshellarg($command),
+                    $session->id
+                );
                 
-                if (empty($screenCheck)) {
-                    // Screen session not found
-                    $session->update(['status' => 'stopped', 'process_id' => null]);
-                    throw new \Exception('Claude screen session is not running');
+                exec($sendCommand, $output, $returnCode);
+                
+                if ($returnCode !== 0) {
+                    // Check if session is still running
+                    $statusCommand = sprintf('%s status %d', escapeshellarg($scriptPath), $session->project_id);
+                    exec($statusCommand, $statusOutput);
+                    
+                    if (isset($statusOutput[0]) && $statusOutput[0] === 'stopped') {
+                        $session->update(['status' => 'stopped', 'process_id' => null]);
+                        throw new \Exception('Claude screen session is not running');
+                    }
+                    
+                    throw new \Exception('Failed to send command: ' . implode("\n", $output));
                 }
                 
-                // Send command via named pipe
-                $communicationDir = storage_path("app/claude-sessions/{$session->id}");
-                $inputPipe = "{$communicationDir}/input.pipe";
-                
-                if (!file_exists($inputPipe)) {
-                    throw new \Exception('Input pipe does not exist');
-                }
-                
-                // Write to named pipe
-                $pipe = fopen($inputPipe, 'w');
-                if (!$pipe) {
-                    throw new \Exception('Could not open input pipe for writing');
-                }
-                
-                fwrite($pipe, $command . "\n");
-                fclose($pipe);
-                
-                Log::info("Sent command via named pipe", [
+                Log::info("Sent command via script", [
                     'session_id' => $session->id,
                     'command' => $command,
-                    'pipe_path' => $inputPipe
+                    'output' => $output
                 ]);
             } else {
                 throw new \Exception('No process ID for Claude session');
@@ -230,14 +195,22 @@ class ClaudeProcessManager
      */
     public function stopSession(ClaudeSession $session): void
     {
-        // Kill screen session
-        if ($session->id) {
-            $screenName = "claude_session_{$session->id}";
-            exec("screen -S {$screenName} -X quit 2>/dev/null");
+        // Stop screen session using script
+        if ($session->project_id) {
+            $scriptPath = base_path('scripts/claude-screen-manager.sh');
+            
+            $command = sprintf(
+                '%s stop %d 2>&1',
+                escapeshellarg($scriptPath),
+                $session->project_id
+            );
+            
+            exec($command, $output);
             
             Log::info("Stopped screen session", [
                 'session_id' => $session->id,
-                'screen_name' => $screenName
+                'project_id' => $session->project_id,
+                'output' => $output
             ]);
         }
         
@@ -311,19 +284,19 @@ class ClaudeProcessManager
      */
     public function isRunning(ClaudeSession $session): bool
     {
-        // Check if screen session is running
-        if ($session->process_id) {
-            // If process_id starts with "claude_session_", it's a screen name
-            if (str_starts_with($session->process_id, 'claude_session_')) {
-                $screenName = $session->process_id;
-            } else {
-                $screenName = "claude_session_{$session->id}";
-            }
+        // Check if screen session is running using script
+        if ($session->process_id && $session->project_id) {
+            $scriptPath = base_path('scripts/claude-screen-manager.sh');
             
-            exec("screen -ls | grep {$screenName}", $screenCheck);
+            $command = sprintf(
+                '%s status %d',
+                escapeshellarg($scriptPath),
+                $session->project_id
+            );
             
-            if (!empty($screenCheck)) {
-                // Screen session exists
+            exec($command, $output);
+            
+            if (isset($output[0]) && str_starts_with($output[0], 'running:')) {
                 return true;
             }
         }

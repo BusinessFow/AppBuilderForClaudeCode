@@ -324,41 +324,110 @@ class WebScrapingService
 
     protected function getNodeBinary(): string
     {
+        // Detect operating system
+        $os = PHP_OS_FAMILY;
+        
         // Try to detect Node.js binary automatically
-        $possiblePaths = [
-            '/usr/local/bin/node',     // macOS Homebrew
-            '/opt/homebrew/bin/node',  // macOS Apple Silicon Homebrew
-            '/usr/bin/node',           // Linux
-            'node',                    // System PATH
-        ];
+        $possiblePaths = [];
+        
+        if ($os === 'Linux') {
+            // Debian/Ubuntu specific paths
+            $possiblePaths = [
+                '/usr/bin/node',               // Standard Debian/Ubuntu location
+                '/usr/bin/nodejs',             // Older Debian/Ubuntu (nodejs package)
+                '/usr/local/bin/node',         // Manually installed
+                '/snap/bin/node',              // Snap package
+                '/home/' . get_current_user() . '/.nvm/versions/node/*/bin/node', // NVM
+                'node',                        // System PATH
+            ];
+        } elseif ($os === 'Darwin') {
+            // macOS paths
+            $possiblePaths = [
+                '/opt/homebrew/bin/node',     // macOS Apple Silicon Homebrew
+                '/usr/local/bin/node',        // macOS Intel Homebrew
+                '/usr/bin/node',               // System
+                'node',                        // System PATH
+            ];
+        } else {
+            // Windows or other
+            $possiblePaths = ['node'];
+        }
 
         foreach ($possiblePaths as $path) {
+            // Handle wildcard paths (for NVM)
+            if (strpos($path, '*') !== false) {
+                $matches = glob($path);
+                if (!empty($matches)) {
+                    // Use the latest version
+                    sort($matches);
+                    $path = end($matches);
+                } else {
+                    continue;
+                }
+            }
+            
             if ($this->commandExists($path)) {
+                Log::info("Node.js binary found at: {$path}");
                 return $path;
             }
         }
 
         // Fallback to system node
+        Log::warning("Node.js binary not found in expected locations, using system PATH");
         return 'node';
     }
 
     protected function getNpmBinary(): string
     {
+        // Detect operating system
+        $os = PHP_OS_FAMILY;
+        
         // Try to detect NPM binary automatically
-        $possiblePaths = [
-            '/usr/local/bin/npm',     // macOS Homebrew
-            '/opt/homebrew/bin/npm',  // macOS Apple Silicon Homebrew
-            '/usr/bin/npm',           // Linux
-            'npm',                    // System PATH
-        ];
+        $possiblePaths = [];
+        
+        if ($os === 'Linux') {
+            // Debian/Ubuntu specific paths
+            $possiblePaths = [
+                '/usr/bin/npm',                // Standard Debian/Ubuntu location
+                '/usr/local/bin/npm',          // Manually installed
+                '/snap/bin/npm',               // Snap package
+                '/home/' . get_current_user() . '/.nvm/versions/node/*/bin/npm', // NVM
+                'npm',                         // System PATH
+            ];
+        } elseif ($os === 'Darwin') {
+            // macOS paths
+            $possiblePaths = [
+                '/opt/homebrew/bin/npm',      // macOS Apple Silicon Homebrew
+                '/usr/local/bin/npm',         // macOS Intel Homebrew  
+                '/usr/bin/npm',                // System
+                'npm',                         // System PATH
+            ];
+        } else {
+            // Windows or other
+            $possiblePaths = ['npm'];
+        }
 
         foreach ($possiblePaths as $path) {
+            // Handle wildcard paths (for NVM)
+            if (strpos($path, '*') !== false) {
+                $matches = glob($path);
+                if (!empty($matches)) {
+                    // Use the latest version
+                    sort($matches);
+                    $path = end($matches);
+                } else {
+                    continue;
+                }
+            }
+            
             if ($this->commandExists($path)) {
+                Log::info("NPM binary found at: {$path}");
                 return $path;
             }
         }
 
         // Fallback to system npm
+        Log::warning("NPM binary not found in expected locations, using system PATH");
         return 'npm';
     }
 

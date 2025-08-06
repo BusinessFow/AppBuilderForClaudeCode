@@ -1,0 +1,13 @@
+# Claude Screen Manager sudoers configuration
+# Copy this to /etc/sudoers.d/claude-screen-manager (on Linux)
+# Or add to /etc/sudoers using visudo (on macOS)
+
+# Allow www-data user to run claude-screen-manager.sh without password
+# For Ubuntu/Debian:
+www-data ALL=(ALL) NOPASSWD: /Users/sport24/Dokumenty/Projects/w91-software-engineering/AppBuilderForClaudeCode/scripts/claude-screen-manager.sh
+
+# For macOS (user _www):
+_www ALL=(ALL) NOPASSWD: /Users/sport24/Dokumenty/Projects/w91-software-engineering/AppBuilderForClaudeCode/scripts/claude-screen-manager.sh
+
+# For development (your user):
+sport24 ALL=(ALL) NOPASSWD: /Users/sport24/Dokumenty/Projects/w91-software-engineering/AppBuilderForClaudeCode/scripts/claude-screen-manager.sh
