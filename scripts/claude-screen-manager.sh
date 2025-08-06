@@ -83,7 +83,8 @@ case "$ACTION" in
         chmod 755 "$CLAUDE_HOME/.config"
         
         # Create the command to run with proper HOME and USER
-        CLAUDE_CMD="export HOME='$CLAUDE_HOME' && export USER='www-data' && cd '$PROJECT_PATH' && echo 'Working directory: '$(pwd) && echo 'HOME: '\$HOME && tail -f '$INPUT_PIPE' | '$CLAUDE_PATH' chat --no-color 2>&1 | tee '$LOG_FILE'"
+        # Claude CLI starts in interactive mode by default
+        CLAUDE_CMD="export HOME='$CLAUDE_HOME' && export USER='www-data' && cd '$PROJECT_PATH' && echo 'Working directory: '$(pwd) && echo 'HOME: '\$HOME && tail -f '$INPUT_PIPE' | '$CLAUDE_PATH' 2>&1 | tee '$LOG_FILE'"
         
         # Start screen session
         screen -dmS "$SCREEN_NAME" bash -c "$CLAUDE_CMD"
