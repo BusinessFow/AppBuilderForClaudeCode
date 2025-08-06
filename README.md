@@ -74,8 +74,8 @@ AppBuilder for ClaudeCode is a complete environment for managing programming tas
 
 ```bash
 # Clone repository
-git clone https://github.com/your-username/appbuilder-for-claudecode.git
-cd appbuilder-for-claudecode
+git clone https://github.com/BusinessFow/AppBuilderForClaudeCode.git
+cd AppBuilderForClaudeCode
 
 # Install PHP dependencies
 composer install
