@@ -1,0 +1,14 @@
+[Unit]
+Description=AppBuilderForClaudeCode Queue Worker
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+ExecStart=/usr/bin/php /srv/app/AppBuilderForClaudeCode/artisan queue:work --sleep=3 --tries=3
+StandardOutput=append:/srv/app/AppBuilderForClaudeCode/storage/logs/queue.log
+StandardError=append:/srv/app/AppBuilderForClaudeCode/storage/logs/queue-error.log
+
+[Install]
+WantedBy=multi-user.target

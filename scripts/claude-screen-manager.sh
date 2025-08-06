@@ -1,15 +1,26 @@
 #!/bin/bash
 
-# Claude Screen Manager Script
+# Claude Screen Manager Script for Debian
 # This script manages screen sessions for Claude with proper permissions
-# Usage: sudo ./claude-screen-manager.sh <action> <project_id> [additional_params]
+# Designed for Debian installation at /srv/app/AppBuilderForClaudeCode
+# Usage: ./claude-screen-manager.sh <action> <project_id> [additional_params]
 
 ACTION=$1
 PROJECT_ID=$2
 SCREEN_NAME="claude_${PROJECT_ID}"
+
+# Debian-specific paths
 CLAUDE_PATH="/usr/local/bin/claude"
-NODE_PATH="/usr/local/bin/node"
-BASE_PATH="/Users/sport24/Dokumenty/Projects/w91-software-engineering/AppBuilderForClaudeCode"
+
+# For Debian systems, use the actual installation path
+# If running from development, detect dynamically; otherwise use production path
+if [ -d "/srv/app/AppBuilderForClaudeCode" ]; then
+    BASE_PATH="/srv/app/AppBuilderForClaudeCode"
+else
+    # Fallback for development environment
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    BASE_PATH="$( cd "$SCRIPT_DIR/.." && pwd )"
+fi
 
 # Function to check if screen session exists
 screen_exists() {
@@ -19,7 +30,9 @@ screen_exists() {
 
 # Function to log messages
 log_message() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "${BASE_PATH}/storage/logs/claude-screen.log"
+    LOG_DIR="${BASE_PATH}/storage/logs"
+    mkdir -p "$LOG_DIR"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "${LOG_DIR}/claude-screen.log"
 }
 
 case "$ACTION" in
@@ -32,7 +45,11 @@ case "$ACTION" in
         
         # Create communication directory if it doesn't exist
         mkdir -p "$COMM_DIR"
-        chown -R www-data:www-data "$COMM_DIR" 2>/dev/null || chown -R _www:_www "$COMM_DIR" 2>/dev/null
+        chmod 755 "$COMM_DIR"
+        # Try to set ownership - use current user if www-data/www doesn't exist
+        chown -R www-data:www-data "$COMM_DIR" 2>/dev/null || \
+        chown -R _www:_www "$COMM_DIR" 2>/dev/null || \
+        chown -R $(whoami):$(whoami) "$COMM_DIR" 2>/dev/null
         
         # Kill any existing screen session
         if screen_exists "$SCREEN_NAME"; then

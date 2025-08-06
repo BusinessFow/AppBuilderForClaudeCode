@@ -1,28 +1,34 @@
-# Claude Screen Manager Setup
+# Claude Screen Manager Setup for Debian
 
-## Installation Steps
+## Quick Installation (Debian)
 
-### 1. Make the script executable
+For a complete Debian installation at `/srv/app/AppBuilderForClaudeCode`:
+
+```bash
+sudo bash scripts/install-debian.sh
+```
+
+## Manual Installation Steps
+
+### 1. Make scripts executable
 ```bash
 chmod +x scripts/claude-screen-manager.sh
+chmod +x scripts/setup-permissions.sh
+chmod +x scripts/install-debian.sh
 ```
 
 ### 2. Configure sudo permissions (REQUIRED)
 
-#### On macOS:
+For Debian production server:
 ```bash
-# Edit sudoers file
-sudo visudo
-
-# Add this line at the end (replace paths and usernames as needed):
-_www ALL=(ALL) NOPASSWD: /Users/sport24/Dokumenty/Projects/w91-software-engineering/AppBuilderForClaudeCode/scripts/claude-screen-manager.sh
-```
-
-#### On Linux:
-```bash
-# Copy sudoers configuration
+# Copy the sudoers configuration
 sudo cp scripts/claude-sudoers /etc/sudoers.d/claude-screen-manager
 sudo chmod 0440 /etc/sudoers.d/claude-screen-manager
+
+# OR manually edit sudoers:
+sudo visudo
+# Add this line:
+www-data ALL=(ALL) NOPASSWD: /srv/app/AppBuilderForClaudeCode/scripts/claude-screen-manager.sh
 ```
 
 ### 3. Update ClaudeProcessManager.php
