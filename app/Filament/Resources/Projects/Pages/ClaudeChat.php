@@ -170,13 +170,14 @@ class ClaudeChat extends Page implements HasForms
             
             $this->loadSession();
         } catch (\Exception $e) {
-            // Check if error is related to directory not existing
-            if (str_contains($e->getMessage(), 'does not exist') || 
-                str_contains($e->getMessage(), 'No such file or directory')) {
+            // First check if the project directory is actually accessible
+            if (!$this->isDirectoryAccessible($this->project->project_path)) {
+                // Only show path not found dialog if the project path is the issue
                 $this->showPathNotFoundDialog();
             } else {
+                // The directory is accessible, so show the actual error
                 Notification::make()
-                    ->title('Error')
+                    ->title('Error starting Claude')
                     ->body($e->getMessage())
                     ->danger()
                     ->send();
@@ -357,7 +358,15 @@ class ClaudeChat extends Page implements HasForms
                 ->danger()
                 ->persistent()
                 ->send();
-        } else {
+        } elseif (!$status['is_executable']) {
+            Notification::make()
+                ->title('Permission denied')
+                ->body("Cannot enter directory '{$path}'. Please run: chmod +x " . escapeshellarg($path))
+                ->danger()
+                ->persistent()
+                ->send();
+        } elseif ($status['message'] !== 'Directory is accessible.') {
+            // Only show warning if there's an actual issue
             Notification::make()
                 ->title('Directory access issue')
                 ->body($status['message'])
@@ -365,6 +374,7 @@ class ClaudeChat extends Page implements HasForms
                 ->persistent()
                 ->send();
         }
+        // If directory is accessible, don't show any notification
     }
     
     protected function createProjectDirectory(string $path): void
