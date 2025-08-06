@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Jobs\ProcessClaudeTodos;
+use App\Jobs\RunClaudeSession;
 use App\Models\ClaudeSession;
 use App\Models\Project;
 use App\Models\SystemLog;
@@ -21,40 +22,86 @@ class ClaudeProcessManager
      */
     public function startSession(Project $project): ClaudeSession
     {
-        // Get or create session
-        $session = $project->claudeSessions()->firstOrCreate(
-            ['status' => 'idle'],
-            [
-                'process_id' => null,
-                'conversation_history' => [],
-            ]
-        );
-        
-        if ($session->isRunning()) {
-            return $session;
+        // Stop any existing running sessions first
+        $existingSession = $project->claudeSessions()->where('status', 'running')->first();
+        if ($existingSession) {
+            $this->stopSession($existingSession);
         }
         
+        // Create new session
+        $session = $project->claudeSessions()->create([
+            'status' => 'idle',
+            'process_id' => null,
+            'conversation_history' => [],
+        ]);
+        
         try {
-            // Build the command
-            $command = [
-                'claude',
-                'code',
-                '--project-dir', $project->project_path,
-            ];
+            // Create screen session name
+            $screenName = "claude_session_{$session->id}";
             
-            // Create the process
-            $process = new Process($command);
-            $process->setWorkingDirectory($project->project_path);
-            $process->setTimeout(null); // No timeout for interactive process
-            $process->setIdleTimeout(null);
-            $process->setPty(true); // Enable pseudo-terminal for interactive mode
+            // Kill any existing screen session with same name
+            exec("screen -S {$screenName} -X quit 2>/dev/null");
             
-            // Start the process
-            $process->start();
+            // Create communication directory
+            $communicationDir = storage_path("app/claude-sessions/{$session->id}");
+            if (!file_exists($communicationDir)) {
+                mkdir($communicationDir, 0755, true);
+            }
             
-            // Store process reference
-            $pid = $process->getPid();
-            $this->processes[$session->id] = $process;
+            // Create log file
+            $logFile = "{$communicationDir}/claude.log";
+            
+            // Create named pipe for input
+            $inputPipe = "{$communicationDir}/input.pipe";
+            if (file_exists($inputPipe)) {
+                unlink($inputPipe);
+            }
+            posix_mkfifo($inputPipe, 0666);
+            
+            // Build command to run Claude in screen session with named pipe
+            $claudeCommand = sprintf(
+                'export PATH="/usr/local/bin:$PATH" && cd %s && echo "Working directory: $(pwd)" && (tail -f %s | /usr/local/bin/claude chat --no-color 2>&1 | tee %s)',
+                escapeshellarg($project->project_path),
+                escapeshellarg($inputPipe),
+                escapeshellarg($logFile)
+            );
+            
+            // Start screen session with Claude
+            $screenCommand = sprintf(
+                'screen -dmS %s bash -c %s',
+                escapeshellarg($screenName),
+                escapeshellarg($claudeCommand)
+            );
+            
+            exec($screenCommand, $output, $returnCode);
+            
+            if ($returnCode !== 0) {
+                throw new \Exception("Failed to start screen session");
+            }
+            
+            // Wait a moment for screen to start
+            sleep(1);
+            
+            // Get the PID of the screen session - different approach
+            exec("screen -ls | grep {$screenName}", $screenOutput);
+            $pid = null;
+            
+            if (!empty($screenOutput[0])) {
+                // Parse screen output: "12345.claude_session_1  (Detached)"
+                if (preg_match('/^\s*(\d+)\./', $screenOutput[0], $matches)) {
+                    $pid = $matches[1];
+                }
+            }
+            
+            // If still no PID, use the screen name as identifier
+            if (!$pid) {
+                $pid = $screenName;
+            }
+            
+            Log::info("Screen session PID detection", [
+                'screen_output' => $screenOutput,
+                'extracted_pid' => $pid
+            ]);
             
             // Update session
             $session->update([
@@ -64,11 +111,11 @@ class ClaudeProcessManager
                 'last_activity' => now(),
             ]);
             
-            // Start monitoring the output
-            $this->monitorProcess($session);
-            
-            // Dispatch job to process TODOs
-            ProcessClaudeTodos::dispatch($session)->delay(now()->addSeconds(5));
+            Log::info("Started Claude in screen session", [
+                'session_id' => $session->id,
+                'screen_name' => $screenName,
+                'pid' => $pid
+            ]);
             
             Log::info("Started Claude session for project {$project->id}", [
                 'project_id' => $project->id,
@@ -99,18 +146,59 @@ class ClaudeProcessManager
     public function sendCommand(ClaudeSession $session, string $command): void
     {
         if (!$session->isRunning()) {
-            throw new \Exception('Claude session is not running');
-        }
-        
-        $process = $this->getProcess($session);
-        if (!$process || !$process->isRunning()) {
-            $session->update(['status' => 'stopped']);
-            throw new \Exception('Claude process is not running');
+            throw new \Exception('Claude session is not running (status: ' . $session->status . ')');
         }
         
         try {
-            // Send command to process stdin
-            $process->getInput()->write($command . PHP_EOL);
+            // First try to get the process from memory
+            $process = $this->getProcess($session);
+            
+            Log::info("Checking process before sending command", [
+                'session_id' => $session->id,
+                'has_process' => $process !== null,
+                'process_running' => $process ? $process->isRunning() : false,
+                'pid' => $session->process_id
+            ]);
+            
+            // Send command via screen
+            if ($session->process_id) {
+                // Build screen session name
+                $screenName = "claude_session_{$session->id}";
+                
+                // Check if screen session exists
+                exec("screen -ls | grep {$screenName}", $screenCheck, $returnCode);
+                
+                if (empty($screenCheck)) {
+                    // Screen session not found
+                    $session->update(['status' => 'stopped', 'process_id' => null]);
+                    throw new \Exception('Claude screen session is not running');
+                }
+                
+                // Send command via named pipe
+                $communicationDir = storage_path("app/claude-sessions/{$session->id}");
+                $inputPipe = "{$communicationDir}/input.pipe";
+                
+                if (!file_exists($inputPipe)) {
+                    throw new \Exception('Input pipe does not exist');
+                }
+                
+                // Write to named pipe
+                $pipe = fopen($inputPipe, 'w');
+                if (!$pipe) {
+                    throw new \Exception('Could not open input pipe for writing');
+                }
+                
+                fwrite($pipe, $command . "\n");
+                fclose($pipe);
+                
+                Log::info("Sent command via named pipe", [
+                    'session_id' => $session->id,
+                    'command' => $command,
+                    'pipe_path' => $inputPipe
+                ]);
+            } else {
+                throw new \Exception('No process ID for Claude session');
+            }
             
             // Update session
             $session->update([
@@ -142,10 +230,23 @@ class ClaudeProcessManager
      */
     public function stopSession(ClaudeSession $session): void
     {
-        $process = $this->getProcess($session);
+        // Kill screen session
+        if ($session->id) {
+            $screenName = "claude_session_{$session->id}";
+            exec("screen -S {$screenName} -X quit 2>/dev/null");
+            
+            Log::info("Stopped screen session", [
+                'session_id' => $session->id,
+                'screen_name' => $screenName
+            ]);
+        }
         
-        if ($process && $process->isRunning()) {
-            $process->stop(5); // 5 second timeout
+        // Clean up any process in memory
+        if (isset($this->processes[$session->id])) {
+            $process = $this->processes[$session->id];
+            if ($process && $process->isRunning()) {
+                $process->stop(5);
+            }
             unset($this->processes[$session->id]);
         }
         
@@ -165,24 +266,31 @@ class ClaudeProcessManager
      */
     public function getOutput(ClaudeSession $session): ?string
     {
-        $process = $this->getProcess($session);
-        
-        if (!$process) {
-            return null;
-        }
-        
         $output = '';
         
-        // Get incremental output
-        $incrementalOutput = $process->getIncrementalOutput();
-        if ($incrementalOutput) {
-            $output .= $incrementalOutput;
-        }
-        
-        // Get incremental error output
-        $incrementalErrorOutput = $process->getIncrementalErrorOutput();
-        if ($incrementalErrorOutput) {
-            $output .= "\n[ERROR] " . $incrementalErrorOutput;
+        // Read from log file created by screen session
+        if ($session->process_id) {
+            $communicationDir = storage_path("app/claude-sessions/{$session->id}");
+            $logFile = "{$communicationDir}/claude.log";
+            
+            if (file_exists($logFile)) {
+                // Read new content from log file
+                $lastPosition = $session->output_position ?? 0;
+                $currentSize = filesize($logFile);
+                
+                if ($currentSize > $lastPosition) {
+                    $handle = fopen($logFile, 'r');
+                    fseek($handle, $lastPosition);
+                    $newOutput = fread($handle, $currentSize - $lastPosition);
+                    fclose($handle);
+                    
+                    if ($newOutput) {
+                        $output .= $newOutput;
+                        // Save the new position
+                        $session->update(['output_position' => $currentSize]);
+                    }
+                }
+            }
         }
         
         if ($output) {
@@ -191,8 +299,8 @@ class ClaudeProcessManager
                 'last_activity' => now(),
             ]);
             
-            // Add to history
-            $session->addToHistory('assistant', $output);
+            // Don't add to history here - it will be added in refreshOutput
+            // to avoid duplicates
         }
         
         return $output ?: null;
@@ -203,16 +311,29 @@ class ClaudeProcessManager
      */
     public function isRunning(ClaudeSession $session): bool
     {
-        $process = $this->getProcess($session);
-        
-        if (!$process || !$process->isRunning()) {
-            if ($session->isRunning()) {
-                $session->update(['status' => 'stopped']);
+        // Check if screen session is running
+        if ($session->process_id) {
+            // If process_id starts with "claude_session_", it's a screen name
+            if (str_starts_with($session->process_id, 'claude_session_')) {
+                $screenName = $session->process_id;
+            } else {
+                $screenName = "claude_session_{$session->id}";
             }
-            return false;
+            
+            exec("screen -ls | grep {$screenName}", $screenCheck);
+            
+            if (!empty($screenCheck)) {
+                // Screen session exists
+                return true;
+            }
         }
         
-        return true;
+        // Process is not running, update status if needed
+        if ($session->isRunning()) {
+            $session->update(['status' => 'stopped', 'process_id' => null]);
+        }
+        
+        return false;
     }
     
     /**
@@ -220,7 +341,41 @@ class ClaudeProcessManager
      */
     private function getProcess(ClaudeSession $session): ?Process
     {
-        return $this->processes[$session->id] ?? null;
+        // First check if we have it in memory
+        if (isset($this->processes[$session->id])) {
+            return $this->processes[$session->id];
+        }
+        
+        // If not, try to reconnect using PID
+        if ($session->process_id) {
+            // Check if process is still running using PID
+            $pid = $session->process_id;
+            
+            // Check if process exists
+            $checkCommand = PHP_OS_FAMILY === 'Windows' 
+                ? "tasklist /FI \"PID eq {$pid}\" 2>NUL | find \"{$pid}\" >NUL"
+                : "ps -p {$pid} > /dev/null 2>&1";
+            
+            exec($checkCommand, $output, $returnCode);
+            
+            if ($returnCode === 0) {
+                // Process is running but we can't reattach to it with Symfony Process
+                // We need to use a different approach - write to a named pipe or use a socket
+                // For now, we'll return null and handle it differently
+                Log::warning("Claude process is running but cannot reattach", [
+                    'session_id' => $session->id,
+                    'pid' => $pid
+                ]);
+                
+                // Mark that the process exists even if we can't control it
+                return null; // This will cause issues with sending commands
+            } else {
+                // Process is not running, update session
+                $session->update(['status' => 'stopped', 'process_id' => null]);
+            }
+        }
+        
+        return null;
     }
     
     /**

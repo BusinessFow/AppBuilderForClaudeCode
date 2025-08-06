@@ -40,7 +40,13 @@ class ProjectForm
                                             ->required()
                                             ->maxLength(255)
                                             ->placeholder('/home/user/projects/my-project')
-                                            ->helperText('Absolute path to the project directory on the server'),
+                                            ->helperText(function ($state) {
+                                                if ($state && !file_exists($state)) {
+                                                    return "⚠️ This directory does not exist. It will be created automatically when you save the project.";
+                                                }
+                                                return 'Absolute path to the project directory on the server';
+                                            })
+                                            ->reactive(),
                                     ]),
                                 
                                 Textarea::make('description')

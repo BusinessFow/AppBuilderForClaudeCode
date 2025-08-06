@@ -61,6 +61,19 @@ class ClaudeChat extends Page implements HasForms
                     'class' => $this->isRunning ? 'fi-btn-danger' : 'fi-btn-success',
                 ]),
             
+            Action::make('createMissingDirectory')
+                ->label('Create Directory')
+                ->icon('heroicon-o-folder-plus')
+                ->color('warning')
+                ->action(function () {
+                    $this->createProjectDirectory($this->project->project_path);
+                })
+                ->modalHeading('Create Project Directory')
+                ->modalDescription(fn() => "The directory '{$this->project->project_path}' does not exist. Do you want to create it?")
+                ->modalSubmitActionLabel('Create Directory')
+                ->requiresConfirmation()
+                ->visible(fn() => !file_exists($this->project->project_path)),
+            
             Action::make('git_pull')
                 ->label('Git Pull')
                 ->icon('heroicon-o-arrow-down-tray')
@@ -125,18 +138,85 @@ class ClaudeChat extends Page implements HasForms
                         ->send();
                 }
             } else {
+                // Check if project path exists before starting Claude
+                if (!file_exists($this->project->project_path)) {
+                    $this->showPathNotFoundDialog();
+                    return;
+                }
+                
                 $session = $manager->startSession($this->project);
+                
                 Notification::make()
                     ->title('Claude started')
+                    ->body('Claude is now running and ready to assist.')
                     ->success()
                     ->send();
+                
+                // Wait a moment for the process to fully initialize
+                sleep(2);
+                
+                // Get initial output if any (should be ls output)
+                $initialOutput = $manager->getOutput($session);
+                if ($initialOutput) {
+                    $session->addToHistory('assistant', $initialOutput);
+                    
+                    Notification::make()
+                        ->title('Initial output received')
+                        ->body(substr($initialOutput, 0, 100) . (strlen($initialOutput) > 100 ? '...' : ''))
+                        ->info()
+                        ->send();
+                }
             }
             
             $this->loadSession();
         } catch (\Exception $e) {
+            // Check if error is related to directory not existing
+            if (str_contains($e->getMessage(), 'does not exist') || 
+                str_contains($e->getMessage(), 'No such file or directory')) {
+                $this->showPathNotFoundDialog();
+            } else {
+                Notification::make()
+                    ->title('Error')
+                    ->body($e->getMessage())
+                    ->danger()
+                    ->send();
+            }
+        }
+    }
+    
+    protected function showPathNotFoundDialog(): void
+    {
+        $path = $this->project->project_path;
+        
+        Notification::make()
+            ->title('Project directory does not exist')
+            ->body("The directory '{$path}' does not exist. Click 'Create Directory' button above to create it, or edit the project to change the path.")
+            ->warning()
+            ->persistent()
+            ->send();
+    }
+    
+    protected function createProjectDirectory(string $path): void
+    {
+        try {
+            if (!file_exists($path)) {
+                if (mkdir($path, 0755, true)) {
+                    Notification::make()
+                        ->title('Directory created')
+                        ->body("The directory '{$path}' has been created successfully.")
+                        ->success()
+                        ->send();
+                    
+                    // Try to start Claude again
+                    $this->toggleClaude();
+                } else {
+                    throw new \Exception('Failed to create directory');
+                }
+            }
+        } catch (\Exception $e) {
             Notification::make()
-                ->title('Error')
-                ->body($e->getMessage())
+                ->title('Error creating directory')
+                ->body("Failed to create directory: " . $e->getMessage())
                 ->danger()
                 ->send();
         }
@@ -169,17 +249,38 @@ class ClaudeChat extends Page implements HasForms
         }
         
         try {
+            // Add message to history immediately
+            $session->addToHistory('user', $this->input);
+            
             // Send command
             $manager->sendCommand($session, $this->input);
             
             // Clear input
+            $messageToSend = $this->input;
             $this->input = '';
             
             // Wait a moment for response
-            sleep(1);
+            sleep(2);
             
             // Get output
             $output = $manager->getOutput($session);
+            
+            if ($output) {
+                // Add output to history
+                $session->addToHistory('assistant', $output);
+                
+                Notification::make()
+                    ->title('Response received')
+                    ->body(substr($output, 0, 100) . (strlen($output) > 100 ? '...' : ''))
+                    ->success()
+                    ->send();
+            } else {
+                Notification::make()
+                    ->title('No response yet')
+                    ->body('The command was sent but no response received yet.')
+                    ->info()
+                    ->send();
+            }
             
             // Reload messages
             $this->loadSession();
@@ -227,8 +328,20 @@ class ClaudeChat extends Page implements HasForms
             
             // Get any new output
             $output = $manager->getOutput($session);
-            if ($output) {
+            if ($output && trim($output) !== '') {
+                // Add the output to conversation history
+                $session->addToHistory('assistant', $output);
                 $this->loadSession();
+                
+                // Dispatch event to scroll chat to bottom
+                $this->dispatch('refreshChat');
+                
+                // Log for debugging
+                \Log::info('Refresh output added to history', [
+                    'session_id' => $session->id,
+                    'output_length' => strlen($output),
+                    'output_preview' => substr($output, 0, 100)
+                ]);
             }
         }
     }

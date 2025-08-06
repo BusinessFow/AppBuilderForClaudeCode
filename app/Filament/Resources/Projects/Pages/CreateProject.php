@@ -11,6 +11,11 @@ class CreateProject extends CreateRecord
     
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        // Create directory if it doesn't exist
+        if (isset($data['project_path']) && !file_exists($data['project_path'])) {
+            mkdir($data['project_path'], 0755, true);
+        }
+        
         // Process JSON fields
         if (isset($data['claude_settings_json'])) {
             $data['claude_settings'] = json_decode($data['claude_settings_json'], true);

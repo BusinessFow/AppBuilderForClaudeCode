@@ -173,13 +173,24 @@
                         @empty
                             <div class="flex items-center justify-center h-full min-h-[300px]">
                                 <div class="text-center">
-                                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                    </svg>
-                                    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No messages yet</h3>
-                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                        {{ $isRunning ? 'Send a message to start the conversation!' : 'Start Claude to begin chatting' }}
-                                    </p>
+                                    @if($isRunning)
+                                        <div class="animate-pulse">
+                                            <div class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm text-primary-600 dark:text-primary-400">
+                                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Claude is starting up...
+                                            </div>
+                                        </div>
+                                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                            Initializing Claude Code session...
+                                        </p>
+                                    @else
+                                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                                            Click "Start Claude" button above to begin
+                                        </p>
+                                    @endif
                                 </div>
                             </div>
                         @endforelse
@@ -213,11 +224,8 @@
                 @else
                     <div class="border-t border-gray-200 dark:border-gray-700 p-6">
                         <div class="text-center">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                                Claude is not running. Click the Start button in the header to begin.
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                Claude is not running. Click the "Start Claude" button above to begin.
                             </p>
                         </div>
                     </div>

@@ -17,6 +17,7 @@ class ClaudeSession extends Model
         'status',
         'last_input',
         'last_output',
+        'output_position',
         'conversation_history',
         'started_at',
         'last_activity',
