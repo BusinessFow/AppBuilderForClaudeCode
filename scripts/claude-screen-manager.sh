@@ -84,7 +84,7 @@ case "$ACTION" in
         
         # Create the command to run with proper HOME and USER
         # Claude CLI starts in interactive mode by default
-        CLAUDE_CMD="export HOME='$CLAUDE_HOME' && export USER='www-data' && cd '$PROJECT_PATH' && echo 'Working directory: '$(pwd) && echo 'HOME: '\$HOME && tail -f '$INPUT_PIPE' | '$CLAUDE_PATH' 2>&1 | tee '$LOG_FILE'"
+        CLAUDE_CMD="cd '$PROJECT_PATH' && echo 'Working directory: '$(pwd) && tail -f '$INPUT_PIPE' | sudo -u nobody env HOME=/tmp claude --dangerously-skip-permissions 2>&1 | tee '$LOG_FILE'"
         
         # Start screen session
         screen -dmS "$SCREEN_NAME" bash -c "$CLAUDE_CMD"
